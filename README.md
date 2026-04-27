@@ -1,6 +1,10 @@
 # 幸福五子棋 - 人工智能程序设计课程设计报告
 
-![Banner](https://img.shields.io/badge/Python-3.8%+-blue.svg) ![Tkinter](https://img.shields.io/badge/GUI-Tkinter-green.svg) ![AI](https://img.shields.io/badge/AI-Minimax%20%7C%20MCTS%20%7C%20AlphaZero-red.svg)
+![Python](https://badgen.net/badge/Python/3.8%2B/blue) ![Tkinter](https://badgen.net/badge/GUI/Tkinter/green) ![AI](https://badgen.net/badge/AI/Minimax%20%7C%20MCTS%20%7C%20AlphaZero/red)
+
+[![GitHub stars](https://img.shields.io/github/stars/DongYaoZe/gomoku-lab?style=social)](https://github.com/DongYaoZe/gomoku-lab/stargazers)
+[![Fork](https://img.shields.io/github/forks/DongYaoZe/gomoku-lab?style=social)](https://github.com/DongYaoZe/gomoku-lab/network/members)
+
 
 本项目为《人工智能程序设计》课程的五子棋博弈期末课程设计。五子棋标准 $15 \times 15$ 棋盘状态空间庞大（约 $3^{225}$ 种状态），对搜索算法提出了极大挑战。本项目不仅实现了一个功能完善、界面美观的五子棋对战平台，还集成了从基础贪心策略到极小极大（Minimax）、蒙特卡洛树搜索（MCTS）及深度强化学习（AlphaZero）等多种异构人工智能博弈算法，并探讨了连环冲四绝杀（VCF）与各类启发式剪枝优化技术。
 
@@ -45,6 +49,23 @@ python main.py
 
 ---
 
+## 📂 项目文件一览
+
+| 文件 | 角色 |
+|------|------|
+| `main.py` | **程序入口** — 创建 Tkinter 根窗口，启动主事件循环 |
+| `core.py` | **核心逻辑** — 棋盘状态、落子、五子连珠判定、禁手规则 |
+| `gui.py` | **图形界面** — 棋盘绘制、点击交互、AI 集成、棋谱保存/回放 |
+| `ai.py` | **初级 AI** (BaselineAI) — 贪心策略：赢→堵→随机 |
+| `ai_advanced.py` | **高级 AI** (AdvancedAI) — Minimax + Alpha-Beta 剪枝 + 启发式评估 + VCF 强杀 |
+| `ai_mcts.py` | **MCTS AI** — 蒙特卡洛树搜索 + UCB1 + 启发式评估替代随机模拟 |
+| `alphazero_net.py` | **AlphaZero 神经网络** — PyTorch 残差 CNN，策略头 + 价值头 |
+| `alphazero_mcts.py` | **AlphaZero MCTS** — 带神经网络先验概率的 PUCT 树搜索 |
+| `ai_alphazero.py` | **AlphaZero AI 封装** — 组合网络 + MCTS，对外暴露 `get_best_move()` |
+| `ai_alphazero_train.py` | **AlphaZero 训练管道** — 自我对弈 → 数据增广 → 网络训练 → 保存模型 |
+
+---
+
 ## 🧩 代码模块与底层原理剖析
 
 ### 1. 核心逻辑裁判引擎 (`core.py`)
@@ -77,27 +98,78 @@ python main.py
 
 ## 🎮 实现效果展示
 
-*(注：请在最终报告中，将以下占位符替换为您录制的真实 GIF 演示动图)*
+### 1. 人机对战全程实录
 
-### 1. 人机对战与胜负判定
-展示玩家与AI（如“深智”或“大师”）对弈的过程，包括左侧棋盘交互、右侧胜率预估和进度条，以及最终连珠胜负弹窗。
+玩家执黑对阵 AI（高级），被但电脑打败了（😭。
 
-![人机对战演示](在此处插入PvE对战的gif动图路径)
+![玩家VS电脑全程](pics/玩家VS电脑全程.gif)
 
-### 2. 禁手规则拦截
-展示在开启“启用禁手规则(仅黑棋)”后，黑棋如果下出“三三”、“四四”或“长连”，系统立即识别并弹窗判黑棋负的竞技级裁判表现。
+### 2. AI 对弈：大师 VS 高级 & 中级
 
-![禁手判定演示](在此处插入禁手判定的gif动图路径)
+机器互搏模式（EvE）下，不同等级 AI 之间的精彩对决。
 
-### 3. VCF 强杀与极限翻盘
-展示在特定残局下，开启“AI VCF强杀搜索”后，AI跨越常规搜索深度，连续实施“冲四”迫使对方被动防守，最终锁定无可挽回胜局的壮观计算。
+大师（Depth=4）VS 高级（Depth=3）
+![大师VS高级](pics/大师VS高级.gif)
 
-![VCF算杀演示](在此处插入VCF强杀的gif动图路径)
+大师（Depth=4）VS 中级（Depth=2） 
+![大师VS中级](pics/大师VS中级.gif) 
 
-### 4. 悔棋反悔与复盘打谱
-展示游戏过程中的实时撤销（Undo）落子状态恢复，以及利用“保存”与“打谱”功能将精彩对局落到本地硬盘并重新以动画解析重演的全流程。
+### 3. 禁手规则判定
 
-![打谱功能演示](在此处插入打谱回放的gif动图路径)
+开启禁手后，黑棋触发三三、四四或长连禁手时系统立即弹窗判负。
+
+![三三禁手动图](pics/33forbidden.gif)
+
+| 三三禁手实例 |
+|:---:|
+| ![33禁手2](pics/33forbidden2.png) |
+| ![33禁手](pics/33forbidden.png) |
+
+| 四四禁手实例 |
+|:---:|
+| ![44禁手](pics/44forbidden.png) |
+
+| 长连禁手实例 |
+|:---:|
+| ![长连禁手](pics/long_link_forbidden.png) |
+
+
+### 4. 复盘打谱与回放
+
+保存棋谱后可通过"打谱"功能打开，以动画逐帧重演整局对弈。
+
+| 回放过程 |
+|:---:|
+| ![打开回放](pics/打开回放.gif) |
+| ![回放动画](pics/回放2.gif) |
+
+### 5. AI 思考过程日志
+
+控制台实时输出各 AI 的决策耗时、搜索估值、缓存命中等信息，便于调试与性能分析。
+
+![命令行日志](pics/cmd_log_print.png)
+
+### 6. 特色功能一览
+
+| AlphaZero 在缺乏训练时的落子，可以看成一幅画 |
+|:---:|
+| ![MCTS评估](pics/AI_deepmind1.PNG) |
+| ![AlphaZero绘画](pics/Alphazero：随机落子绘画.png) |
+
+| 用五子棋写字 |
+|:---:|
+| ![落子绘画](pics/落子绘画：“可”.png) |
 
 ---
-*本项目为《人工智能程序设计》课程作业。系统从基础环境搭建到深层AI算法设计，层层递进，不仅逻辑严谨、算力优秀，且兼具极高完成度的用户界面。*
+## 致谢
+
+本项目的 AlphaZero 实现参考了以下开源项目：
+
+https://github.com/junxiaosong/AlphaZero_Gomoku
+
+基于 PyTorch 的五子棋 AlphaZero 实现，为本项目的策略价值网络与自对弈训练管道提供了重要参考。
+
+---
+*本项目为2026《人工智能程序设计》dyz的课程作业。*
+
+*欢迎在GitHub上star我！*

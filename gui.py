@@ -507,6 +507,7 @@ class GomokuGUI:
                 continue 
                 
         self._replay_mode_active = True
+        self.mode = "Replay"
         self.replay_index = 0
         self.progress_lbl.config(text="回放中...")
         self.replay_next()
@@ -529,5 +530,5 @@ class GomokuGUI:
             self._trigger_ai_if_needed()
 
     def show_about(self):
-        messagebox.showinfo("关于", "幸福五子棋\n版本：DYZ-2026课程设计\n基于纯Python Tkinter开发")
+        messagebox.showinfo("关于", "幸福五子棋\n版本：DYZ-2026课程设计-v1.1\n基于纯Python Tkinter开发")
 
