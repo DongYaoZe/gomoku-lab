@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import messagebox, filedialog
 from tkinter import ttk
 import datetime
+import time
+import threading
 from core import GomokuGame
 from ai import BaselineAI
 from ai_advanced import AdvancedAI
@@ -33,6 +35,10 @@ class GomokuGUI:
         self._mode_override = None
         self._replay_mode_active = False
         self._ai_thinking = False
+        self._ai_start_time = 0
+        self._ai_estimated_duration = 2.0
+        self._ai_durations = []
+        self._ai_result = None
         self.black_player_var = tk.StringVar(value="玩家")
         self.white_player_var = tk.StringVar(value="高级(E)")
         self.theme_var = tk.StringVar(value="木制棋盘")
@@ -384,11 +390,56 @@ class GomokuGUI:
         if not ai_obj: return
 
         self._ai_thinking = True
-        self.progress_var.set(50)
-        if hasattr(self, 'progress_lbl'): self.progress_lbl.config(text="AI 思考中...")
-        self.root.update()
-        
-        move = ai_obj.get_best_move(self.game)
+        self._ai_start_time = time.time()
+        self._ai_result = None
+        self.progress_var.set(0)
+        self.progress_lbl.config(text="AI 思考中...")
+
+        def compute():
+            result = ai_obj.get_best_move(self.game)
+            self._ai_result = result
+
+        thread = threading.Thread(target=compute, daemon=True)
+        thread.start()
+        self._animate_progress(ai_obj)
+
+    def _animate_progress(self, ai_obj):
+        """根据历史耗时平滑推进进度条，AI完成后收尾"""
+        if self._ai_result is not None:
+            self._finish_ai_turn(ai_obj)
+            return
+
+        elapsed = time.time() - self._ai_start_time
+        est = self._ai_estimated_duration
+        # 进度曲线：快速到 85%，然后减速等待
+        if est > 0:
+            ratio = elapsed / est
+        else:
+            ratio = 0.9
+        # 用 ease-out 曲线：progress = 90 * (1 - (1-ratio)^2)，上限 92%
+        if ratio < 1.0:
+            progress = 90.0 * (1.0 - (1.0 - ratio) ** 2)
+        else:
+            # 超时后缓慢从 90% 爬向 95%
+            over = elapsed - est
+            progress = 90.0 + min(5.0, over * 2.0)
+
+        self.progress_var.set(min(progress, 95))
+        pct = int(min(progress, 95))
+        self.progress_lbl.config(text=f"AI 思考中... {pct}%")
+
+        self.root.after(50, lambda: self._animate_progress(ai_obj))
+
+    def _finish_ai_turn(self, ai_obj):
+        """AI计算完成后的收尾：落子、更新胜率、记录耗时"""
+        elapsed = time.time() - self._ai_start_time
+        self._ai_durations.append(elapsed)
+        # 保留最近 8 次，用加权平均预估下次耗时（近期权重更高）
+        recent = self._ai_durations[-8:]
+        weights = list(range(1, len(recent) + 1))
+        self._ai_estimated_duration = sum(d * w for d, w in zip(recent, weights)) / sum(weights)
+
+        move = self._ai_result
         if move:
             if len(self.game.history) == 1 and self.game.current_player == 2:
                 import random
@@ -401,12 +452,12 @@ class GomokuGUI:
                     if self.game.is_valid_move(new_r, new_c):
                         move = (new_r, new_c)
             self.make_move(move[0], move[1])
-            
+
         if hasattr(ai_obj, "latest_win_rate"):
             self.win_rate_lbl.config(text=f"黑方胜率: {ai_obj.latest_win_rate:.1f}%")
 
         self.progress_var.set(100)
-        self.progress_lbl.config(text="完毕")
+        self.progress_lbl.config(text=f"完毕 ({elapsed:.1f}s)")
         self._ai_thinking = False
 
     def check_game_over(self):
