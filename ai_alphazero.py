@@ -1,5 +1,6 @@
 import os
 import copy
+from pathlib import Path
 
 try:
     from alphazero_net import PolicyValueNet
@@ -8,13 +9,18 @@ try:
 except ImportError:
     HAS_PYTORCH = False
 
+_DEFAULT_MODEL = str(Path(__file__).with_name("current_policy_15x15.model"))
+
+
 class AlphaZeroAI:
     """
     原生实现的 AlphaZero AI
     使用重写的 alphazero_net.py (PyTorch 模型) 和 alphazero_mcts.py (搜索器)
     无需依赖任何第三方外部框架，直接对接 core.GomokuGame。
     """
-    def __init__(self, player, model_file='./current_policy_15x15.model', n_playout=400):
+    def __init__(self, player, model_file=None, n_playout=400):
+        if model_file is None:
+            model_file = _DEFAULT_MODEL
         self.player = player
         self.latest_win_rate = 50.0
         

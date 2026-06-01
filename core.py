@@ -2,6 +2,7 @@ import random as _random
 
 class GomokuGame:
     _zobrist_table = None
+    _zobrist_player_key = None
     _zobrist_seed = 42
 
     @classmethod
@@ -13,6 +14,7 @@ class GomokuGame:
             [[rng.getrandbits(64) for _ in range(2)] for _ in range(board_size)]
             for _ in range(board_size)
         ]
+        cls._zobrist_player_key = rng.getrandbits(64)
 
     def __init__(self, board_size=15):
         self._init_zobrist(board_size)
@@ -73,6 +75,25 @@ class GomokuGame:
         self.winner = 0
         self.current_player = player
         return True
+
+    def simulate_move(self, r, c, player):
+        """轻量模拟落子（AI搜索用），仅维护 board/hash/move_count"""
+        self.board[r][c] = player
+        self.move_count += 1
+        self.hash ^= self._zobrist_table[r][c][player - 1]
+
+    def undo_simulate(self, r, c, player):
+        """撤销 simulate_move"""
+        self.board[r][c] = 0
+        self.move_count -= 1
+        self.hash ^= self._zobrist_table[r][c][player - 1]
+
+    @property
+    def full_hash(self):
+        """含当前玩家信息的完整哈希，用于转置表键"""
+        if self.current_player == 1:
+            return self.hash
+        return self.hash ^ self._zobrist_player_key
 
     def check_winner(self, r, c):
         player = self.board[r][c]

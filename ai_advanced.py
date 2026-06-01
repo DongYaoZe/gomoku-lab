@@ -52,9 +52,7 @@ class AdvancedAI:
                 if self._timed_out:
                     break
 
-                game.board[r][c] = self.player
-                game.move_count += 1
-                game.hash ^= game._zobrist_table[r][c][self.player - 1]
+                game.simulate_move(r, c, self.player)
                 won = game.check_winner(r, c)
                 prev_winner = game.winner
                 if won:
@@ -62,9 +60,7 @@ class AdvancedAI:
 
                 val = self._minimax(game, current_depth - 1, alpha, beta, False, r, c)
 
-                game.board[r][c] = 0
-                game.move_count -= 1
-                game.hash ^= game._zobrist_table[r][c][self.player - 1]
+                game.undo_simulate(r, c, self.player)
                 game.winner = prev_winner
 
                 if val > depth_best_val:
@@ -107,7 +103,7 @@ class AdvancedAI:
             return self._evaluate_board(game)
 
         # Transposition table lookup
-        tt_key = game.hash
+        tt_key = game.full_hash
         if tt_key in self.memo:
             cached_depth, cached_val, flag = self.memo[tt_key]
             if cached_depth >= depth:
@@ -129,18 +125,14 @@ class AdvancedAI:
                 if self._timed_out:
                     return 0
 
-                game.board[r][c] = self.player
-                game.move_count += 1
-                game.hash ^= game._zobrist_table[r][c][self.player - 1]
+                game.simulate_move(r, c, self.player)
                 prev_winner = game.winner
                 if game.check_winner(r, c):
                     game.winner = self.player
 
                 val = self._minimax(game, depth - 1, alpha, beta, False, r, c)
 
-                game.board[r][c] = 0
-                game.move_count -= 1
-                game.hash ^= game._zobrist_table[r][c][self.player - 1]
+                game.undo_simulate(r, c, self.player)
                 game.winner = prev_winner
 
                 if val > max_eval:
@@ -169,18 +161,14 @@ class AdvancedAI:
                 if self._timed_out:
                     return 0
 
-                game.board[r][c] = opponent
-                game.move_count += 1
-                game.hash ^= game._zobrist_table[r][c][opponent - 1]
+                game.simulate_move(r, c, opponent)
                 prev_winner = game.winner
                 if game.check_winner(r, c):
                     game.winner = opponent
 
                 val = self._minimax(game, depth - 1, alpha, beta, True, r, c)
 
-                game.board[r][c] = 0
-                game.move_count -= 1
-                game.hash ^= game._zobrist_table[r][c][opponent - 1]
+                game.undo_simulate(r, c, opponent)
                 game.winner = prev_winner
 
                 if val < min_eval:
@@ -260,40 +248,28 @@ class AdvancedAI:
             if score < 1000:
                 continue
 
-            game.board[r][c] = player
-            game.move_count += 1
+            game.simulate_move(r, c, player)
 
-            # 找到对手必须防守的点
             defense_points = self._find_forced_defenses(game, player, r, c, candidates)
 
             if len(defense_points) == 0:
-                # 无法防守 = 胜利
-                game.board[r][c] = 0
-                game.move_count -= 1
+                game.undo_simulate(r, c, player)
                 return (r, c)
             elif len(defense_points) == 1:
                 dr, dc = defense_points[0]
-                game.board[dr][dc] = opponent
-                game.move_count += 1
+                game.simulate_move(dr, dc, opponent)
 
                 if not game.check_winner(dr, dc):
                     sub = self.find_vcf(game, player, depth - 2)
-                    game.board[dr][dc] = 0
-                    game.move_count -= 1
-                    game.board[r][c] = 0
-                    game.move_count -= 1
+                    game.undo_simulate(dr, dc, opponent)
+                    game.undo_simulate(r, c, player)
                     if sub is not None:
                         return (r, c)
                 else:
-                    game.board[dr][dc] = 0
-                    game.move_count -= 1
-
-                if game.board[r][c] == player:
-                    game.board[r][c] = 0
-                    game.move_count -= 1
+                    game.undo_simulate(dr, dc, opponent)
+                    game.undo_simulate(r, c, player)
             else:
-                game.board[r][c] = 0
-                game.move_count -= 1
+                game.undo_simulate(r, c, player)
 
         return None
 
