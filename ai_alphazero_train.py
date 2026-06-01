@@ -25,18 +25,17 @@ class FastTrainPipeline():
         self.board_height = 15
         
         # =======================================================
-        # 🚨 [关键可调参数区: 用户试水专用] 🚨
-        # 根据算力和时间，您可以随时修改以下参数来加速训练或提高质量！
+        # 可调参数区
+        # n_playout: MCTS 模拟次数，越大越强但越慢（推荐 100~400）
+        # play_batch_size: 每轮收集的自对弈局数
+        # game_batch_num: 总训练轮数
         # =======================================================
-        
-        # MCTS 模拟次数 (核心耗时点)：官方为 400，单机推荐 50 以追求快速验证。
-        self.n_playout = 10      
-        
-        # 每次策略更新前的独立棋局数量 (收集数据的速度)：
-        self.play_batch_size = 1  
-        
-        # 训练过程最大的对局批次，供预览：
-        self.game_batch_num = 20  
+
+        self.n_playout = 100
+
+        self.play_batch_size = 1
+
+        self.game_batch_num = 500
         
         # =======================================================
 
@@ -46,7 +45,7 @@ class FastTrainPipeline():
         self.temp = 1.0  
         self.c_puct = 5
         self.buffer_size = 10000
-        self.batch_size = 128  
+        self.batch_size = 256
         self.data_buffer = deque(maxlen=self.buffer_size)
         self.epochs = 5  
         self.kl_targ = 0.02

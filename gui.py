@@ -29,9 +29,10 @@ class GomokuGUI:
         self.root = root
         self.root.title("幸福五子棋")
         self.game = GomokuGame()
-        
+
         self._mode_override = None
         self._replay_mode_active = False
+        self._ai_thinking = False
         self.black_player_var = tk.StringVar(value="玩家")
         self.white_player_var = tk.StringVar(value="高级(E)")
         self.theme_var = tk.StringVar(value="木制棋盘")
@@ -319,6 +320,8 @@ class GomokuGUI:
             self.canvas.itemconfigure(self.flash_item, state="hidden")
 
     def undo(self):
+        if self._ai_thinking:
+            return
         if self.mode == "PvP" or self.mode == "EvE":
             if len(self.game.history) < 1:
                 return
@@ -337,6 +340,8 @@ class GomokuGUI:
         self.update_info()
 
     def on_click(self, event):
+        if self._ai_thinking:
+            return
         if self.game.winner != 0 or self.game.check_draw() or self.mode == "Replay":
             return
             
@@ -377,7 +382,8 @@ class GomokuGUI:
     def ai_turn(self):
         ai_obj = self.ai_black if self.game.current_player == 1 else self.ai_white
         if not ai_obj: return
-            
+
+        self._ai_thinking = True
         self.progress_var.set(50)
         if hasattr(self, 'progress_lbl'): self.progress_lbl.config(text="AI 思考中...")
         self.root.update()
@@ -398,9 +404,10 @@ class GomokuGUI:
             
         if hasattr(ai_obj, "latest_win_rate"):
             self.win_rate_lbl.config(text=f"预期胜率: {ai_obj.latest_win_rate:.1f}%")
-            
+
         self.progress_var.set(100)
         self.progress_lbl.config(text="完毕")
+        self._ai_thinking = False
 
     def check_game_over(self):
         if self.game.winner != 0:
@@ -453,6 +460,7 @@ class GomokuGUI:
             return
             
         try:
+            # gb2312 编码兼容中文 Windows 系统默认编码
             with open(filepath, "w", encoding="gb2312") as f:
                 f.write(record)
             messagebox.showinfo("保存成功", "棋谱已成功保存！")
@@ -463,13 +471,14 @@ class GomokuGUI:
         filepath = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
         if filepath:
             try:
+                # 优先尝试 gb2312（本程序保存格式），失败则回退 utf-8
                 try:
                     with open(filepath, "r", encoding="gb2312") as f:
                         content = f.read()
                 except UnicodeDecodeError:
                     with open(filepath, "r", encoding="utf-8") as f:
                         content = f.read()
-                        
+
                 self.parse_and_play(content)
             except Exception as e:
                 messagebox.showerror("错误", f"读取失败: {e}")
