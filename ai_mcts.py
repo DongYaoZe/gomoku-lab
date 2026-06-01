@@ -115,11 +115,16 @@ class MCTSAI:
         best_child = max(root.children, key=lambda c: c.visits)
 
         if best_child.visits > 0:
+            # ratio = 己方视角胜率
             if best_child.player_just_moved == self.player:
                 ratio = best_child.wins / best_child.visits
             else:
                 ratio = 1.0 - (best_child.wins / best_child.visits)
-            self.latest_win_rate = ratio * 100.0
+            # 统一转换为黑方胜率
+            if self.player == 1:
+                self.latest_win_rate = ratio * 100.0
+            else:
+                self.latest_win_rate = (1.0 - ratio) * 100.0
         else:
             self.latest_win_rate = 50.0
 

@@ -74,10 +74,13 @@ class AlphaZeroAI:
         r = action // game.board_size
         c = action % game.board_size
         
-        # 3. 顺便调用网络评估一次当前盘面，为了在 GUI 界面上显示胜率预估
-        # policy_value_fn 返回的是以当前玩家（也就是AI自己）视角的胜率 [-1, 1]
+        # 3. 网络评估当前盘面，转换为黑方胜率显示
+        # policy_value_fn 返回当前玩家视角的价值 [-1, 1]
         _, value = self.policy_value_net.policy_value_fn(game)
-        win_rate = (value + 1.0) / 2.0 * 100.0  # 映射到 0~100%
-        self.latest_win_rate = win_rate
+        self_win_rate = (value + 1.0) / 2.0 * 100.0
+        if self.player == 1:
+            self.latest_win_rate = self_win_rate
+        else:
+            self.latest_win_rate = 100.0 - self_win_rate
         
         return r, c

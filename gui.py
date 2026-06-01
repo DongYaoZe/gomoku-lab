@@ -161,7 +161,7 @@ class GomokuGUI:
         self.info_label = tk.Label(self.side_frame, text="当前执棋: 黑方", font=("Arial", 12))
         self.info_label.pack(pady=5)
         
-        self.win_rate_lbl = tk.Label(self.side_frame, text="预期胜率: -", font=("Arial", 12))
+        self.win_rate_lbl = tk.Label(self.side_frame, text="黑方胜率: -", font=("Arial", 12))
         self.win_rate_lbl.pack(pady=2)
         
         self.forbidden_var = tk.BooleanVar(value=False)
@@ -234,7 +234,7 @@ class GomokuGUI:
         self.progress_var.set(0)
         self.progress_lbl.config(text="0%")
         if hasattr(self, 'win_rate_lbl'):
-            self.win_rate_lbl.config(text="预期胜率: -")
+            self.win_rate_lbl.config(text="黑方胜率: -")
         self._draw_board()
         self.update_info()
         self._trigger_ai_if_needed()
@@ -403,7 +403,7 @@ class GomokuGUI:
             self.make_move(move[0], move[1])
             
         if hasattr(ai_obj, "latest_win_rate"):
-            self.win_rate_lbl.config(text=f"预期胜率: {ai_obj.latest_win_rate:.1f}%")
+            self.win_rate_lbl.config(text=f"黑方胜率: {ai_obj.latest_win_rate:.1f}%")
 
         self.progress_var.set(100)
         self.progress_lbl.config(text="完毕")

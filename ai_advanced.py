@@ -1,4 +1,5 @@
 import time
+import math
 
 EXACT, LOWER_BOUND, UPPER_BOUND = 0, 1, 2
 
@@ -25,7 +26,7 @@ class AdvancedAI:
             vcf_best = self.find_vcf(game, self.player, depth=11)
             if vcf_best:
                 print(f"[AdvancedAI] VCF forced win at {vcf_best}")
-                self.latest_win_rate = 99.9
+                self.latest_win_rate = 99.9 if self.player == 1 else 0.1
                 return vcf_best
 
         candidates = self._get_candidates(game)
@@ -79,7 +80,12 @@ class AdvancedAI:
                 best_val = depth_best_val
 
         clamped = max(-100000, min(100000, best_val))
-        self.latest_win_rate = 50.0 + (clamped / 2000.0)
+        # Sigmoid 映射：val 为己方视角，转换为黑方胜率
+        self_win_prob = 1.0 / (1.0 + math.exp(-clamped / 5000.0))
+        if self.player == 1:
+            self.latest_win_rate = self_win_prob * 100.0
+        else:
+            self.latest_win_rate = (1.0 - self_win_prob) * 100.0
         self.latest_win_rate = max(0.1, min(99.9, self.latest_win_rate))
 
         elapsed = time.time() - self._start_time
