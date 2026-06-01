@@ -197,9 +197,12 @@ class AdvancedAI:
 
     def _order_moves(self, game, candidates, player, depth):
         scored = []
+        opponent = 3 - player
         for r, c in candidates:
-            score = self._evaluate_point(game.board, r, c, player) * 2 + \
-                    self._evaluate_point(game.board, r, c, 3 - player)
+            attack = self._evaluate_point(game.board, r, c, player)
+            defense = self._evaluate_point(game.board, r, c, opponent)
+            # 取攻防最大值，确保关键防守点不被漏掉
+            score = max(attack, defense) + min(attack, defense) * 0.5
             # Killer move bonus
             if depth < len(self.killer_moves):
                 if (r, c) == self.killer_moves[depth][0]:
@@ -338,7 +341,7 @@ class AdvancedAI:
                     else:
                         opp_score += score
 
-        return my_score - opp_score * 1.15
+        return my_score - opp_score * 1.3
 
     def _score_line_from(self, board, r, c, dr, dc, player, size):
         """从 (r,c) 沿正方向提取线段并评分（含间隔棋形）"""
