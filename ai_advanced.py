@@ -210,7 +210,9 @@ class AdvancedAI:
             score += self.history_table[player - 1][r * 15 + c]
             scored.append((score, r, c))
         scored.sort(reverse=True, key=lambda x: x[0])
-        return [(r, c) for _, r, c in scored]
+        # Top-N 剪枝：深层搜索只保留最有价值的候选
+        max_width = 15 if self.depth >= 4 else 25
+        return [(r, c) for _, r, c in scored[:max_width]]
 
     def find_vcf(self, game, player, depth=11):
         """威胁空间搜索：连续冲四迫使对手防守直至成五"""
@@ -288,7 +290,8 @@ class AdvancedAI:
         return defenses
 
     def _get_candidates(self, game):
-        radius = 1 if self.depth >= 4 else 2
+        # 统一使用半径2，通过 top-N 排序控制分支因子
+        radius = 2
         candidates = set()
         has_stone = False
         board_size = game.board_size
@@ -310,102 +313,155 @@ class AdvancedAI:
         return list(candidates)
 
     def _evaluate_board(self, game):
+        """全盘评估：扫描所有方向线段，累计双方得分"""
         my_score = 0
         opp_score = 0
         opponent = 3 - self.player
         board = game.board
         size = game.board_size
         directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
-        counted = set()
 
-        for r in range(size):
-            for c in range(size):
-                if board[r][c] == 0:
-                    continue
-                player = board[r][c]
-                for di, (dr, dc) in enumerate(directions):
-                    key = (r, c, di)
-                    if key in counted:
+        for di, (dr, dc) in enumerate(directions):
+            # 遍历该方向所有起始线段
+            for r in range(size):
+                for c in range(size):
+                    # 只从线段起点开始（避免重复计数）
+                    pr, pc = r - dr, c - dc
+                    if 0 <= pr < size and 0 <= pc < size and board[pr][pc] != 0:
                         continue
+                    if board[r][c] == 0:
+                        continue
+                    player = board[r][c]
                     score = self._score_line_from(board, r, c, dr, dc, player, size)
-                    if score > 0:
-                        # Mark all stones in this line as counted for this direction
-                        nr, nc = r, c
-                        while 0 <= nr < size and 0 <= nc < size and board[nr][nc] == player:
-                            counted.add((nr, nc, di))
-                            nr += dr
-                            nc += dc
-                        if player == self.player:
-                            my_score += score
-                        else:
-                            opp_score += score
+                    if player == self.player:
+                        my_score += score
+                    else:
+                        opp_score += score
 
-        return my_score - opp_score * 1.1
+        return my_score - opp_score * 1.15
 
     def _score_line_from(self, board, r, c, dr, dc, player, size):
-        """从 (r,c) 沿正方向评估一条连续线段"""
-        consecutive = 0
+        """从 (r,c) 沿正方向提取线段并评分（含间隔棋形）"""
+        # 提取最多 9 格的线段上下文
+        cells = []
+        nr, nc = r - dr, c - dc
+        # 前方一格
+        if 0 <= nr < size and 0 <= nc < size:
+            cells.append(board[nr][nc])
+        else:
+            cells.append(3 - player)
+        # 从 (r,c) 开始向正方向取 6 格
         nr, nc = r, c
-        while 0 <= nr < size and 0 <= nc < size and board[nr][nc] == player:
-            consecutive += 1
+        for _ in range(6):
+            if 0 <= nr < size and 0 <= nc < size:
+                cells.append(board[nr][nc])
+            else:
+                cells.append(3 - player)
             nr += dr
             nc += dc
 
-        if consecutive < 2:
-            return 0
+        # 转为字符串: 1=己方, 0=空, 2=对手/边界
+        s = ""
+        for v in cells:
+            if v == player:
+                s += "1"
+            elif v == 0:
+                s += "0"
+            else:
+                s += "2"
 
-        # Check blocks at both ends
-        blocks = 0
-        # Positive end
-        if not (0 <= nr < size and 0 <= nc < size) or board[nr][nc] != 0:
-            blocks += 1
-        # Negative end
-        br, bc = r - dr, c - dc
-        if not (0 <= br < size and 0 <= bc < size) or board[br][bc] != 0:
-            blocks += 1
+        return self._line_pattern_score(s)
 
-        if blocks == 2:
-            return 0
+    def _line_pattern_score(self, s):
+        """对一条方向线段字符串评分"""
+        # 成五
+        if "11111" in s:
+            return 100000
 
-        if consecutive >= 5:
-            return 1000000
-        elif consecutive == 4:
-            return 50000 if blocks == 0 else 5000
-        elif consecutive == 3:
-            return 5000 if blocks == 0 else 500
-        elif consecutive == 2:
-            return 200 if blocks == 0 else 50
-        return 0
+        score = 0
+        # 活四
+        if "011110" in s:
+            score += 50000
+        # 冲四（含跳四）
+        elif "11110" in s or "01111" in s:
+            score += 6000
+        elif "11101" in s or "10111" in s or "11011" in s:
+            score += 5500
+
+        # 活三（含跳活三）
+        if "01110" in s or "011010" in s or "010110" in s:
+            score += 6000
+        elif "001110" in s or "011100" in s:
+            score += 5000
+
+        # 眠三
+        if "21110" in s or "01112" in s or "211010" in s or "010112" in s:
+            score += 600
+        elif "10110" in s or "11010" in s or "01011" in s or "01101" in s:
+            score += 500
+
+        # 活二
+        if "00110" in s or "01100" in s or "01010" in s or "010010" in s:
+            score += 400
+
+        # 眠二
+        if "21100" in s or "00112" in s or "010012" in s or "210010" in s:
+            score += 80
+
+        return score
 
     def _evaluate_point(self, board, r, c, focus_player):
-        """评估某个空位对 focus_player 的价值"""
-        score = 0
+        """评估某个空位对 focus_player 的价值（含组合威胁检测）"""
         directions = [(1, 0), (0, 1), (1, 1), (1, -1)]
         size = len(board)
 
+        total_score = 0
+        n_fours = 0      # 冲四数
+        n_open_threes = 0  # 活三数
+        has_open_four = False  # 活四
+
         for dr, dc in directions:
-            # 提取以 (r,c) 为中心的 9 格线段
             line = []
             for i in range(-4, 5):
                 nr, nc = r + i * dr, c + i * dc
                 if 0 <= nr < size and 0 <= nc < size:
                     line.append(board[nr][nc])
                 else:
-                    line.append(3 - focus_player)  # 边界视为对手
-
-            # 模拟落子
+                    line.append(3 - focus_player)
             line[4] = focus_player
-            score += self._pattern_score(line, focus_player)
+
+            dir_score, threats = self._pattern_score(line, focus_player)
+            total_score += dir_score
+
+            if threats.get('five'):
+                return 1000000
+            if threats.get('open_four'):
+                has_open_four = True
+            n_fours += threats.get('fours', 0)
+            n_open_threes += threats.get('open_threes', 0)
+
+        # 组合威胁加分（必胜棋形）
+        if has_open_four:
+            total_score += 100000
+        if n_fours >= 2:
+            # 双冲四 = 必胜
+            total_score += 90000
+        if n_fours >= 1 and n_open_threes >= 1:
+            # 四三 = 必胜
+            total_score += 80000
+        if n_open_threes >= 2:
+            # 双活三 = 必胜（非禁手模式下）
+            total_score += 70000
 
         # 中心位置微小加分
         center = size // 2
         dist = abs(r - center) + abs(c - center)
-        score += max(0, 14 - dist)
+        total_score += max(0, 14 - dist)
 
-        return score
+        return total_score
 
     def _pattern_score(self, line, player):
-        """对 9 格线段进行模式匹配评分"""
+        """对 9 格线段进行全量模式匹配，返回 (分数, 威胁字典)"""
         s = ""
         for v in line:
             if v == player:
@@ -415,44 +471,84 @@ class AdvancedAI:
             else:
                 s += "2"
 
+        threats = {}
         score = 0
 
-        # 五连
+        # === 成五 ===
         if "11111" in s:
-            return 1000000
+            threats['five'] = True
+            return 1000000, threats
 
-        # 活四 (两端开放的四连)
+        # === 活四（无法防守）===
         if "011110" in s:
-            score += 50000
+            threats['open_four'] = True
+            score += 100000
+            return score, threats
 
-        # 冲四 (一端被堵的四连或有间隔的四)
-        four_patterns = ["211110", "011112", "10111", "11011", "11101"]
-        for p in four_patterns:
+        # === 冲四（含跳四，迫使对手防守）===
+        fours = 0
+        # 连续冲四
+        four_rush = ["211110", "011112", "11110", "01111"]
+        for p in four_rush:
             if p in s:
-                score += 5000
+                fours += 1
+                break
+        # 跳冲四
+        four_jump = ["11101", "10111", "11011"]
+        for p in four_jump:
+            if p in s:
+                fours += 1
+                break
+        if fours > 0:
+            score += 8000 * fours
+            threats['fours'] = fours
+
+        # === 活三（一步变活四）===
+        open_threes = 0
+        # 连活三
+        if "011100" in s or "001110" in s or "01110" in s:
+            open_threes += 1
+        # 跳活三
+        if "010110" in s or "011010" in s:
+            open_threes += 1
+        if open_threes > 0:
+            score += 6000 * open_threes
+            threats['open_threes'] = open_threes
+
+        # === 眠三（一端被堵或需要跳步）===
+        dead_threes = 0
+        dead_three_patterns = [
+            "211100", "001112",  # 边堵连三
+            "210110", "011012",  # 边堵跳三
+            "211010", "010112",  # 边堵跳三变体
+            "10011", "11001",    # 两端间隔眠三
+        ]
+        for p in dead_three_patterns:
+            if p in s:
+                dead_threes += 1
+                break
+        if dead_threes > 0:
+            score += 600
+
+        # === 活二 ===
+        open_twos = 0
+        open_two_patterns = [
+            "001100", "011000", "000110",  # 连活二
+            "010100", "001010", "010010",  # 跳活二
+        ]
+        for p in open_two_patterns:
+            if p in s:
+                open_twos += 1
+                break
+        if open_twos > 0:
+            score += 400
+
+        # === 眠二 ===
+        dead_two_patterns = ["211000", "000112", "210100", "001012", "10001"]
+        for p in dead_two_patterns:
+            if p in s:
+                score += 80
                 break
 
-        # 活三
-        three_open = ["01110", "010110", "011010"]
-        for p in three_open:
-            if p in s:
-                score += 5000
-                break
-
-        # 眠三
-        three_dead = ["21110", "01112", "10110", "01011", "11010", "01011"]
-        for p in three_dead:
-            if p in s:
-                score += 500
-                break
-
-        # 活二
-        if "00110" in s or "01100" in s or "01010" in s or "010010" in s:
-            score += 200
-
-        # 眠二
-        if "21100" in s or "00112" in s or "10010" in s or "01001" in s:
-            score += 50
-
-        return score
+        return score, threats
 
