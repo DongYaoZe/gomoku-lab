@@ -217,80 +217,94 @@ class AdvancedAI:
         max_width = 15 if self.depth >= 4 else 25
         return [(r, c) for _, r, c in scored[:max_width]]
 
+    def _vcf_move_is_legal(self, game, player, r, c):
+        """Return whether a hypothetical VCF move is legal under the repo's optional forbidden mode."""
+        if game.board[r][c] != 0:
+            return False
+        if not game.forbidden_enabled or player != 1:
+            return True
+
+        previous_player = game.current_player
+        game.current_player = 1
+        try:
+            return not bool(game.check_forbidden(r, c))
+        finally:
+            game.current_player = previous_player
+
+    def _vcf_winning_completions(self, game, player):
+        """List legal empty points where ``player`` wins immediately."""
+        wins = []
+        for r, c in sorted(self._get_candidates(game)):
+            if not self._vcf_move_is_legal(game, player, r, c):
+                continue
+            game.simulate_move(r, c, player)
+            try:
+                if game.check_winner(r, c):
+                    wins.append((r, c))
+            finally:
+                game.undo_simulate(r, c, player)
+        return wins
+
     def find_vcf(self, game, player, depth=11):
-        """威胁空间搜索：连续冲四迫使对手防守直至成五"""
+        """Search continuous-four forcing lines without treating non-threats as wins."""
         if depth <= 0:
             return None
 
         opponent = 3 - player
-        candidates = self._get_candidates(game)
+        candidates = sorted(self._get_candidates(game))
 
-        # 先检查对手是否有即时杀
-        for r, c in candidates:
-            game.board[r][c] = opponent
-            if game.check_winner(r, c):
-                game.board[r][c] = 0
-                # 对手有杀，必须先堵
-                game.board[r][c] = player
-                if game.check_winner(r, c):
-                    game.board[r][c] = 0
-                    return (r, c)
-                game.board[r][c] = 0
-                return None
-            game.board[r][c] = 0
+        # The side to move always takes a legal immediate win first, even if the
+        # opponent also threatens to win on their next turn.
+        own_wins = self._vcf_winning_completions(game, player)
+        if own_wins:
+            return own_wins[0]
 
-        # 检查己方是否有即时杀
-        for r, c in candidates:
-            game.board[r][c] = player
-            if game.check_winner(r, c):
-                game.board[r][c] = 0
-                return (r, c)
-            game.board[r][c] = 0
+        # Once the opponent already has an immediate legal win, a pure VCF
+        # attack is not a valid substitute for defending it.
+        if self._vcf_winning_completions(game, opponent):
+            return None
 
-        # 寻找冲四点（落子后形成四连，对手必须防守）
+        # A VCF move must create at least one *actual legal winning completion*.
+        # Two or more completions form an unstoppable double threat.  Exactly
+        # one completion means the defender has one forced blocking point.
         for r, c in candidates:
+            if not self._vcf_move_is_legal(game, player, r, c):
+                continue
             score = self._evaluate_point(game.board, r, c, player)
             if score < 1000:
                 continue
 
             game.simulate_move(r, c, player)
+            try:
+                completions = self._vcf_winning_completions(game, player)
+                if len(completions) >= 2:
+                    return (r, c)
+                if len(completions) != 1:
+                    continue
 
-            defense_points = self._find_forced_defenses(game, player, r, c, candidates)
+                dr, dc = completions[0]
+                # If the only nominal block is itself illegal (notably a black
+                # forbidden move), the defender has no legal reply.
+                if not self._vcf_move_is_legal(game, opponent, dr, dc):
+                    return (r, c)
 
-            if len(defense_points) == 0:
-                game.undo_simulate(r, c, player)
-                return (r, c)
-            elif len(defense_points) == 1:
-                dr, dc = defense_points[0]
                 game.simulate_move(dr, dc, opponent)
-
-                if not game.check_winner(dr, dc):
-                    sub = self.find_vcf(game, player, depth - 2)
-                    game.undo_simulate(dr, dc, opponent)
-                    game.undo_simulate(r, c, player)
-                    if sub is not None:
+                try:
+                    # A forced block that wins for the defender refutes the line.
+                    if game.check_winner(dr, dc):
+                        continue
+                    if self.find_vcf(game, player, depth - 2) is not None:
                         return (r, c)
-                else:
+                finally:
                     game.undo_simulate(dr, dc, opponent)
-                    game.undo_simulate(r, c, player)
-            else:
+            finally:
                 game.undo_simulate(r, c, player)
 
         return None
 
-    def _find_forced_defenses(self, game, attacker, ar, ac, candidates):
-        """找到攻击者落子后对手必须防守的点"""
-        defenses = []
-        for r, c in candidates:
-            if game.board[r][c] != 0:
-                continue
-            if r == ar and c == ac:
-                continue
-            game.board[r][c] = attacker
-            if game.check_winner(r, c):
-                defenses.append((r, c))
-            game.board[r][c] = 0
-        return defenses
+    def _find_forced_defenses(self, game, attacker, ar, ac, candidates=None):
+        """Compatibility helper: legal immediate winning completions after an attack."""
+        return self._vcf_winning_completions(game, attacker)
 
     def _get_candidates(self, game):
         # 统一使用半径2，通过 top-N 排序控制分支因子
